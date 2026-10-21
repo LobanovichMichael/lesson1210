@@ -96,10 +96,7 @@ public class GameController {
             });
         });
 
-        // Размещаем начальный набор монет
-        for (int i = 0; i < COINS_COUNT; i++) {
-            spawnCoin();
-        }
+        spawnCoin(COINS_COUNT);
 
         // Запускаем игровой цикл: handle() вызывается на каждом кадре
         new AnimationTimer() {
@@ -114,6 +111,26 @@ public class GameController {
      * Создаёт новую монету в случайной точке игрового поля
      * (внутри границ, с учётом радиуса) и добавляет её на панель.
      */
+    private void spawnCoin(int coinsCount) {
+        while (coinsCount > 0) {
+            double paneWidth = gamePane.getPrefWidth();
+            double paneHeight = gamePane.getPrefHeight();
+
+            // Координаты центра монеты выбираются так, чтобы монета
+            // целиком помещалась внутри панели
+            double x = random.nextInt((int) (0 + COIN_RADIUS), (int) (paneWidth - COIN_RADIUS));
+            double y = random.nextInt((int) (0 + COIN_RADIUS), (int) (paneHeight - COIN_RADIUS));
+
+            Circle coin = new Circle(x, y, COIN_RADIUS, Color.GOLD);
+            coin.setStroke(Color.ORANGE);
+            coin.setStrokeWidth(1);
+
+            coins.add(coin);
+            gamePane.getChildren().add(coin);
+            coinsCount--;
+        }
+    }
+
     private void spawnCoin() {
         double paneWidth = gamePane.getPrefWidth();
         double paneHeight = gamePane.getPrefHeight();
@@ -179,11 +196,20 @@ public class GameController {
         player.setX(nx);
         player.setY(ny);
 
+        List<Circle> takenCoins = new ArrayList<>();
         // Проверяем столкновения со всеми монетами
         for (Circle coin : coins) {
             if (intersects(player, coin)) {
-                System.out.println("intersects");
+                takenCoins.add(coin);
+                score++;
+                scoreLabel.setText("Счёт: " + score);
             }
+        }
+
+        for (Circle coin : takenCoins) {
+            coins.remove(coin);
+            gamePane.getChildren().remove(coin);
+            spawnCoin();
         }
     }
 
