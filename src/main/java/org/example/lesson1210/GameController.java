@@ -261,10 +261,47 @@ public class GameController {
         }
 
         updateEnemies();
+        updatePlayerHitVisual();
     }
 
     private void updateEnemies() {
+        double paneWidth = gamePane.getPrefWidth();
+        double paneHeight = gamePane.getPrefHeight();
 
+        List<Enemy> offScreenEnemies = new ArrayList<>();
+        for (Enemy e : enemies) {
+            e.rect.setX(e.rect.getX() + e.dx);
+            e.rect.setY(e.rect.getY() + e.dy);
+
+            boolean offScreen = e.rect.getX() > paneWidth + ENEMY_SIZE ||
+                    e.rect.getX() < -ENEMY_SIZE ||
+                    e.rect.getY() > paneHeight + ENEMY_SIZE ||
+                    e.rect.getY() < -ENEMY_SIZE;
+
+            if (offScreen) {
+                offScreenEnemies.add(e);
+            }
+        }
+
+        for (Enemy e : offScreenEnemies) {
+            enemies.remove(e);
+            gamePane.getChildren().remove(e.rect);
+        }
+    }
+
+    private void updatePlayerHitVisual() {
+        boolean hit = false;
+        for (Enemy e : enemies) {
+            if (e.rect.getBoundsInParent().intersects(player.getBoundsInParent())) {
+                hit = true;
+            }
+        }
+        if (hit) {
+            player.setFill(Color.RED);
+        } else {
+            player.setFill(BLUE);
+        }
+//        player.setFill(hit ? Color.RED : BLUE);
     }
 
     /**
