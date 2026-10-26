@@ -65,8 +65,29 @@ public class GameController {
     /** Цвет игрока (синий). */
     private Color BLUE = Color.rgb(0, 0, 255);
 
+    private final double ENEMY_SIZE = 25;
+    private double ENEMY_SPEED = 2;
+    private long ENEMY_SPAWN_INTERVAL_NS = 1_500_000_000L;
+    private long lastEnemySpawnNanos = 0;
+
+
+
     /** Генератор случайных чисел для позиционирования монет. */
     private Random random = new Random();
+
+    private List<Enemy> enemies = new ArrayList<>();
+
+    class Enemy {
+        Rectangle rect;
+        double dx;
+        double dy;
+
+        public Enemy(Rectangle rect, double dx, double dy) {
+            this.rect = rect;
+            this.dx = dx;
+            this.dy = dy;
+        }
+    }
 
     /**
      * Инициализация контроллера. Вызывается JavaFX автоматически после загрузки FXML.
@@ -102,7 +123,7 @@ public class GameController {
         new AnimationTimer() {
             @Override
             public void handle(long now) {
-                update();
+                update(now);
             }
         }.start();
     }
@@ -148,6 +169,25 @@ public class GameController {
         gamePane.getChildren().add(coin);
     }
 
+    private void spawnEnemy() {
+        double paneWidth = gamePane.getPrefWidth();
+        double paneHeight = gamePane.getPrefHeight();
+
+        int edge = random.nextInt(4);
+        double x = 0, y = 0, dx = 0, dy = 0;
+        if (edge == 0) {
+            x = -ENEMY_SIZE;
+            y = random.nextInt((int)(paneHeight - ENEMY_SIZE));
+            dx = ENEMY_SPEED;
+            dy = 0;
+        }
+        Rectangle rect = new Rectangle(ENEMY_SIZE, ENEMY_SIZE, Color.BLACK);
+        rect.setX(x);
+        rect.setY(y);
+        enemies.add(new Enemy(rect, dx, dy));
+        gamePane.getChildren().add(rect);
+    }
+
     /**
      * Обновляет состояние игры на каждом кадре:
      * <ul>
@@ -156,7 +196,7 @@ public class GameController {
      *     <li>проверяет столкновения с монетами.</li>
      * </ul>
      */
-    private void update() {
+    private void update(long now) {
         // Смещение игрока за текущий кадр
         double dx = 0, dy = 0;
         if (pressedKeys.contains(KeyCode.W)) {
@@ -211,6 +251,20 @@ public class GameController {
             gamePane.getChildren().remove(coin);
             spawnCoin();
         }
+
+        if (lastEnemySpawnNanos == 0) {
+            lastEnemySpawnNanos = now;
+        }
+        if (now - lastEnemySpawnNanos >= ENEMY_SPAWN_INTERVAL_NS) {
+            spawnEnemy();
+            lastEnemySpawnNanos = now;
+        }
+
+        updateEnemies();
+    }
+
+    private void updateEnemies() {
+
     }
 
     /**
