@@ -65,23 +65,45 @@ public class GameController {
     /** Цвет игрока (синий). */
     private Color BLUE = Color.rgb(0, 0, 255);
 
+    /** Размер стороны квадрата врага (в пикселях). */
     private final double ENEMY_SIZE = 25;
+
+    /** Скорость перемещения врага (пикселей за кадр). */
     private double ENEMY_SPEED = 2;
+
+    /** Интервал между появлениями врагов в наносекундах (1.5 секунды). */
     private long ENEMY_SPAWN_INTERVAL_NS = 1_500_000_000L;
+
+    /** Время последнего появления врага в наносекундах; 0 — враг ещё не создавался. */
     private long lastEnemySpawnNanos = 0;
 
-
-
-    /** Генератор случайных чисел для позиционирования монет. */
+    /** Генератор случайных чисел для позиционирования монет и врагов. */
     private Random random = new Random();
 
+    /** Список активных врагов на игровом поле. */
     private List<Enemy> enemies = new ArrayList<>();
 
+    /**
+     * Внутренний класс, описывающий врага.
+     * Хранит прямоугольник для отрисовки и вектор движения.
+     */
     class Enemy {
+        /** Прямоугольник, отображающий врага на игровом поле. */
         Rectangle rect;
+
+        /** Смещение врага по оси X за один кадр. */
         double dx;
+
+        /** Смещение врага по оси Y за один кадр. */
         double dy;
 
+        /**
+         * Создаёт нового врага.
+         *
+         * @param rect прямоугольник врага
+         * @param dx   смещение по X за кадр
+         * @param dy   смещение по Y за кадр
+         */
         public Enemy(Rectangle rect, double dx, double dy) {
             this.rect = rect;
             this.dx = dx;
@@ -117,6 +139,7 @@ public class GameController {
             });
         });
 
+        // Размещаем стартовое количество монет на поле
         spawnCoin(COINS_COUNT);
 
         // Запускаем игровой цикл: handle() вызывается на каждом кадре
@@ -129,8 +152,9 @@ public class GameController {
     }
 
     /**
-     * Создаёт новую монету в случайной точке игрового поля
-     * (внутри границ, с учётом радиуса) и добавляет её на панель.
+     * Создаёт несколько монет в случайных точках игрового поля.
+     *
+     * @param coinsCount количество создаваемых монет
      */
     private void spawnCoin(int coinsCount) {
         while (coinsCount > 0) {
@@ -152,6 +176,10 @@ public class GameController {
         }
     }
 
+    /**
+     * Создаёт одну новую монету в случайной точке игрового поля
+     * и добавляет её на панель.
+     */
     private void spawnCoin() {
         double paneWidth = gamePane.getPrefWidth();
         double paneHeight = gamePane.getPrefHeight();
@@ -169,21 +197,32 @@ public class GameController {
         gamePane.getChildren().add(coin);
     }
 
+    /**
+     * Создаёт нового врага у края игрового поля и задаёт ему направление движения.
+     * <p>
+     * В текущей реализации враг появляется только у левого края.
+     */
     private void spawnEnemy() {
         double paneWidth = gamePane.getPrefWidth();
         double paneHeight = gamePane.getPrefHeight();
 
+        // Определяем край появления врага.
+        // Сейчас обрабатывается только левый край (edge == 0).
         int edge = random.nextInt(4);
         double x = 0, y = 0, dx = 0, dy = 0;
         if (edge == 0) {
             x = -ENEMY_SIZE;
-            y = random.nextInt((int)(paneHeight - ENEMY_SIZE));
+            y = random.nextInt((int) (paneHeight - ENEMY_SIZE));
             dx = ENEMY_SPEED;
             dy = 0;
         }
+
+        // Создаём визуальное представление врага и задаём начальную позицию
         Rectangle rect = new Rectangle(ENEMY_SIZE, ENEMY_SIZE, Color.BLACK);
         rect.setX(x);
         rect.setY(y);
+
+        // Добавляем врага в список активных врагов и на игровое поле
         enemies.add(new Enemy(rect, dx, dy));
         gamePane.getChildren().add(rect);
     }
@@ -246,15 +285,19 @@ public class GameController {
             }
         }
 
+        // Удаляем собранные монеты и создаём вместо них новые
         for (Circle coin : takenCoins) {
             coins.remove(coin);
             gamePane.getChildren().remove(coin);
             spawnCoin();
         }
 
+        // Инициализируем время последнего спавна врага при первом кадре
         if (lastEnemySpawnNanos == 0) {
             lastEnemySpawnNanos = now;
         }
+
+        // Проверяем, пора ли создать нового врага
         if (now - lastEnemySpawnNanos >= ENEMY_SPAWN_INTERVAL_NS) {
             spawnEnemy();
             lastEnemySpawnNanos = now;
@@ -264,15 +307,20 @@ public class GameController {
         updatePlayerHitVisual();
     }
 
+    /**
+     * Перемещает всех врагов и удаляет тех, кто вышел за пределы игрового поля.
+     */
     private void updateEnemies() {
         double paneWidth = gamePane.getPrefWidth();
         double paneHeight = gamePane.getPrefHeight();
 
         List<Enemy> offScreenEnemies = new ArrayList<>();
         for (Enemy e : enemies) {
+            // Сдвигаем врага согласно его вектору движения
             e.rect.setX(e.rect.getX() + e.dx);
             e.rect.setY(e.rect.getY() + e.dy);
 
+            // Проверяем, вышел ли враг за границы поля
             boolean offScreen = e.rect.getX() > paneWidth + ENEMY_SIZE ||
                     e.rect.getX() < -ENEMY_SIZE ||
                     e.rect.getY() > paneHeight + ENEMY_SIZE ||
@@ -283,12 +331,17 @@ public class GameController {
             }
         }
 
+        // Удаляем врагов, находящихся за пределами поля
         for (Enemy e : offScreenEnemies) {
             enemies.remove(e);
             gamePane.getChildren().remove(e.rect);
         }
     }
 
+    /**
+     * Обновляет внешний вид игрока при столкновении с врагом:
+     * окрашивает игрока в красный цвет, если произошло пересечение.
+     */
     private void updatePlayerHitVisual() {
         boolean hit = false;
         for (Enemy e : enemies) {
