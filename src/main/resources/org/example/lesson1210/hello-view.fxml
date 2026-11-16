@@ -23,5 +23,11 @@
                 <Font size="22.0" />
             </font>
         </Label>
+
+        <Label fx:id="bestScoreLabel" layoutX="220.0" layoutY="15.0" text="Рекорд: 0">
+            <font>
+                <Font size="22.0" />
+            </font>
+        </Label>
     </children>
 </AnchorPane>

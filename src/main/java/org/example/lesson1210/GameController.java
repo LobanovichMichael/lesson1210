@@ -10,6 +10,10 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 
 /**
@@ -34,6 +38,9 @@ public class GameController {
     @FXML
     protected Label scoreLabel;
 
+    @FXML
+    protected Label bestScoreLabel;
+
     /**
      * Множество клавиш, которые сейчас зажаты пользователем.
      * Используется для плавного (непрерывного) перемещения игрока,
@@ -46,6 +53,8 @@ public class GameController {
 
     /** Текущее количество набранных очков. */
     private int score = 0;
+
+    private int bestScore = 0;
 
     /** Список всех активных монет на поле. */
     private List<Circle> coins = new ArrayList<>();
@@ -126,6 +135,8 @@ public class GameController {
         player.setStroke(Color.BLACK);
         player.setStrokeWidth(2);
         gamePane.getChildren().add(player);
+        bestScore = readBestScore();
+        bestScoreLabel.setText("Рекорд: " + bestScore);
 
         // Подписываемся на события клавиатуры сцены.
         // Platform.runLater нужен, потому что на момент initialize()
@@ -282,6 +293,11 @@ public class GameController {
                 takenCoins.add(coin);
                 score++;
                 scoreLabel.setText("Счёт: " + score);
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestScoreLabel.setText("Рекорд: " + bestScore);
+                    writeBestScore(bestScore);
+                }
             }
         }
 
@@ -387,5 +403,45 @@ public class GameController {
         double distX = closestX - circleX;
         double distY = closestY - circleY;
         return distX * distX + distY * distY <= radius * radius;
+    }
+
+
+
+
+    private int readBestScore() {
+        Path filePath = Path.of("src/main/resources/org/example/lesson1210/bestScore.txt");
+        int result = 0;
+
+        try {
+            result = Integer.parseInt(Files.readString(filePath));
+        } catch (IOException e) {
+            System.out.println("Не удалось прочитать лучший результат предыдущих игр!");
+        } catch (NumberFormatException e) {
+            System.out.println("Файл с рекордом был повреждён");
+            try {
+                Files.writeString(filePath, "0");
+            } catch (IOException e1) {
+                System.out.println("Не удалось исправить файл с рекордом");
+            }
+        }
+
+//        try (Scanner sc = new Scanner(filePath)) {
+//            result = sc.nextInt();
+//        } catch (IOException e) {
+//            System.out.println("Не удалось прочитать лучший результат предыдущих игр!");
+//        }
+
+        return result;
+    }
+
+
+    private void writeBestScore(int score) {
+        Path path = Path.of("src/main/resources/org/example/lesson1210/bestScore.txt");
+
+        try {
+            Files.writeString(path, String.valueOf(score));
+        } catch (IOException e) {
+            System.out.println("Не удалось записать рекорд в файл");
+        }
     }
 }
