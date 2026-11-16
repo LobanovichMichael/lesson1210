@@ -10,7 +10,6 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,8 +37,13 @@ public class GameController {
     @FXML
     protected Label scoreLabel;
 
+    /** Метка для отображения лучшего результата (рекорда). */
     @FXML
     protected Label bestScoreLabel;
+
+    /** Метка для отображения оставшегося количества жизней игрока. */
+    @FXML
+    protected Label hitPointsLabel;
 
     /**
      * Множество клавиш, которые сейчас зажаты пользователем.
@@ -54,7 +58,11 @@ public class GameController {
     /** Текущее количество набранных очков. */
     private int score = 0;
 
+    /** Лучший результат за все игры, сохранённый в файле. */
     private int bestScore = 0;
+
+    /** Текущее количество жизней игрока. */
+    private int playerHP = 3;
 
     /** Список всех активных монет на поле. */
     private List<Circle> coins = new ArrayList<>();
@@ -83,8 +91,14 @@ public class GameController {
     /** Интервал между появлениями врагов в наносекундах (1.5 секунды). */
     private long ENEMY_SPAWN_INTERVAL_NS = 1_500_000_000L;
 
+    /** Длительность состояния получения игроком урона в наносекундах. */
+    private long PLAYER_HIT_DURATION_NS = 1_500_000_000L;
+
     /** Время последнего появления врага в наносекундах; 0 — враг ещё не создавался. */
     private long lastEnemySpawnNanos = 0;
+
+    /** Время последнего получения игроком урона в наносекундах. */
+    private long lastPlayerHitNanos = 0;
 
     /** Генератор случайных чисел для позиционирования монет и врагов. */
     private Random random = new Random();
@@ -137,6 +151,7 @@ public class GameController {
         gamePane.getChildren().add(player);
         bestScore = readBestScore();
         bestScoreLabel.setText("Рекорд: " + bestScore);
+        hitPointsLabel.setText("Жизни: " + playerHP);
 
         // Подписываемся на события клавиатуры сцены.
         // Platform.runLater нужен, потому что на момент initialize()
@@ -211,21 +226,37 @@ public class GameController {
     /**
      * Создаёт нового врага у края игрового поля и задаёт ему направление движения.
      * <p>
-     * В текущей реализации враг появляется только у левого края.
+     * Враг может появиться у любого из четырёх краёв поля и двигаться
+     * по направлению внутрь игровой области.
      */
     private void spawnEnemy() {
         double paneWidth = gamePane.getPrefWidth();
         double paneHeight = gamePane.getPrefHeight();
 
         // Определяем край появления врага.
-        // Сейчас обрабатывается только левый край (edge == 0).
+        // 0 — левый, 1 — верхний, 2 — правый, 3 — нижний.
         int edge = random.nextInt(4);
-        double x = 0, y = 0, dx = 0, dy = 0;
+        double x, y, dx, dy;
         if (edge == 0) {
             x = -ENEMY_SIZE;
             y = random.nextInt((int) (paneHeight - ENEMY_SIZE));
             dx = ENEMY_SPEED;
             dy = 0;
+        } else if (edge == 1) {
+            x = random.nextInt((int) (paneWidth - ENEMY_SIZE));
+            y = -ENEMY_SIZE;
+            dx = 0;
+            dy = ENEMY_SPEED;
+        } else if (edge == 2) {
+            x = paneWidth + ENEMY_SIZE;
+            y = random.nextInt((int) (paneHeight - ENEMY_SIZE));
+            dx = -ENEMY_SPEED;
+            dy = 0;
+        } else {
+            x = random.nextInt((int) (paneWidth - ENEMY_SIZE));
+            y = paneHeight + ENEMY_SIZE;
+            dx = 0;
+            dy = -ENEMY_SPEED;
         }
 
         // Создаём визуальное представление врага и задаём начальную позицию
@@ -243,8 +274,12 @@ public class GameController {
      * <ul>
      *     <li>перемещает игрока согласно зажатым клавишам WASD;</li>
      *     <li>удерживает игрока в пределах игрового поля;</li>
-     *     <li>проверяет столкновения с монетами.</li>
+     *     <li>проверяет столкновения с монетами и начисляет очки;</li>
+     *     <li>создаёт новых врагов по таймеру и перемещает существующих;</li>
+     *     <li>обновляет визуальное состояние игрока при получении урона.</li>
      * </ul>
+     *
+     * @param now текущее время кадра в наносекундах
      */
     private void update(long now) {
         // Смещение игрока за текущий кадр
@@ -320,7 +355,7 @@ public class GameController {
         }
 
         updateEnemies();
-        updatePlayerHitVisual();
+        updatePlayerHitVisual(now);
     }
 
     /**
@@ -355,22 +390,57 @@ public class GameController {
     }
 
     /**
-     * Обновляет внешний вид игрока при столкновении с врагом:
-     * окрашивает игрока в красный цвет, если произошло пересечение.
+     * Обновляет состояние игрока при столкновении с врагом:
+     * уменьшает количество жизней с учётом задержки между попаданиями
+     * и временно окрашивает игрока в красный цвет.
+     *
+     * @param now текущее время кадра в наносекундах
      */
-    private void updatePlayerHitVisual() {
-        boolean hit = false;
+    /**
+     * Обновляет состояние игрока при столкновении с врагом:
+     * уменьшает количество жизней с учётом задержки между попаданиями
+     * и временно окрашивает игрока в красный цвет.
+     *
+     * @param now текущее время кадра в наносекундах
+     */
+    private void updatePlayerHitVisual(long now) {
+        // Перебираем всех активных врагов на поле.
         for (Enemy e : enemies) {
+            // Проверяем, пересекаются ли прямоугольники врага и игрока.
+            // getBoundsInParent() возвращает границы фигуры в системе координат родителя,
+            // а intersects(...) проверяет пересечение этих прямоугольных областей.
             if (e.rect.getBoundsInParent().intersects(player.getBoundsInParent())) {
-                hit = true;
+
+                // Урон наносится не каждый кадр, а только если с момента последнего
+                // попадания прошло больше PLAYER_HIT_DURATION_NS наносекунд.
+                // Это своеобразная "неуязвимость" после получения урона:
+                // пока игрок стоит на враге, жизни не будут уменьшаться каждый кадр.
+                if (now > lastPlayerHitNanos + PLAYER_HIT_DURATION_NS) {
+                    // Уменьшаем количество жизней игрока на 1.
+                    playerHP -= 1;
+
+                    // Отладочный вывод текущего количества жизней в консоль.
+                    System.out.println(playerHP);
+
+                    // Запоминаем время текущего попадания.
+                    // Именно от этого значения будет отсчитываться следующий период неуязвимости.
+                    lastPlayerHitNanos = now;
+
+                    // Обновляем текстовую метку с количеством жизней на экране.
+                    hitPointsLabel.setText("Жизни: " + playerHP);
+                }
             }
         }
-        if (hit) {
+
+        // Если с момента последнего попадания прошло меньше PLAYER_HIT_DURATION_NS,
+        // то игрок ещё находится в состоянии "получил урон" — окрашиваем его в красный.
+        // Это визуальная индикация того, что игрок недавно столкнулся с врагом.
+        if (lastPlayerHitNanos + PLAYER_HIT_DURATION_NS > now) {
             player.setFill(Color.RED);
         } else {
+            // Иначе возвращаем игроку его обычный синий цвет.
             player.setFill(BLUE);
         }
-//        player.setFill(hit ? Color.RED : BLUE);
     }
 
     /**
@@ -405,9 +475,14 @@ public class GameController {
         return distX * distX + distY * distY <= radius * radius;
     }
 
-
-
-
+    /**
+     * Читает лучший результат из файла.
+     * <p>
+     * Если файл отсутствует или не может быть прочитан, возвращается 0.
+     * Если содержимое файла повреждено, файл перезаписывается значением 0.
+     *
+     * @return лучший результат, сохранённый ранее, или 0 при ошибке чтения
+     */
     private int readBestScore() {
         Path filePath = Path.of("src/main/resources/org/example/lesson1210/bestScore.txt");
         int result = 0;
@@ -434,7 +509,11 @@ public class GameController {
         return result;
     }
 
-
+    /**
+     * Записывает лучший результат в файл.
+     *
+     * @param score новый лучший результат, который нужно сохранить
+     */
     private void writeBestScore(int score) {
         Path path = Path.of("src/main/resources/org/example/lesson1210/bestScore.txt");
 

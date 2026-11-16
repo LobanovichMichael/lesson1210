@@ -14,7 +14,7 @@
         <Pane fx:id="gamePane"
               layoutX="20.0" layoutY="60.0"
               prefHeight="520.0" prefWidth="760.0"
-              style="-fx-background-color: #f4f4f4;
+              style="-fx-background-color: #fafafa;
                      -fx-border-color: #333333;
                      -fx-border-width: 2;" />
 
@@ -29,5 +29,12 @@
                 <Font size="22.0" />
             </font>
         </Label>
+
+        <Label fx:id="hitPointsLabel" layoutX="620.0" layoutY="15.0" text="Жизни: 0">
+            <font>
+                <Font size="22.0" />
+            </font>
+        </Label>
+
     </children>
 </AnchorPane>
